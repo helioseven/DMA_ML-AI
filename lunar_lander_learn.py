@@ -99,10 +99,10 @@ def generate_data(number_of_games, max_turns, model):
 		if score > best_score:
 			best_score = score
 
-		prev_reward = init_reward
+#		prev_reward = init_reward
 		for item in game_memory:
-			print(item[2])
-			if item[2] >= prev_reward:
+			if item[2] >= 0.0:
+#				print(item[2])
 				label = np.array(list(l_1hot))
 				label[item[1]] = 1
 
@@ -110,7 +110,7 @@ def generate_data(number_of_games, max_turns, model):
 				feat_data.append(item[0])
 				lbl_data.append(label)
 
-			prev_reward = item[2]
+#			prev_reward = item[2]
 
 	# print number of games played through and return data
 	print("{} examples were made.".format(len(feat_data)))
@@ -120,7 +120,7 @@ def generate_data(number_of_games, max_turns, model):
 env = gym.make("LunarLander-v2")
 env.reset()
 # variable initializations
-init_reward = 0.0
+# init_reward = 0.0
 n_actions = env.action_space.n
 nd_states = getStateShape()
 learn_rate = 1.0
