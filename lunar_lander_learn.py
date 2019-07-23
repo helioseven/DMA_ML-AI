@@ -101,7 +101,7 @@ def generate_data(number_of_games, max_turns, model):
 
 #		prev_reward = init_reward
 		for item in game_memory:
-			if item[2] >= 0.0:
+			if item[2] >= 25.0:
 #				print(item[2])
 				label = np.array(list(l_1hot))
 				label[item[1]] = 1
