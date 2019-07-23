@@ -1,2 +1,5 @@
 # ignore all .csv files
 *.csv
+
+# ignore data folders
+reinforcement-v-supervised-images/
