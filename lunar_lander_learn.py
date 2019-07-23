@@ -8,14 +8,13 @@ from keras.layers.core import Dense, Dropout, Flatten
 def main():
 	model = getModel()
 	high_score = 0
-	median_score = -50
 	features = []
 	labels = []
 
 	i = 1
 	while high_score < 200:
 		print("No success yet, generating more data.")
-		f_data, l_data, score = generate_data(10, 500, median_score, model)
+		f_data, l_data, score = generate_data(10, 500, model)
 
 		if len(f_data) < 1:
 			continue
@@ -29,8 +28,6 @@ def main():
 
 		if score > high_score:
 			high_score = score
-		median_score = int(((median_score * i) + score) / (i + 1))
-		print(median_score)
 		i += 1
 		learn_rate = 1 / i
 
@@ -41,7 +38,8 @@ def main():
 def getStateShape():
 	state = env.reset()
 	action = env.action_space.sample()
-	obs, _, _, _ = env.step(action)
+	obs, reward, _, _ = env.step(action)
+	init_reward = reward
 	return np.array(obs).shape
 
 def getModel():
@@ -56,7 +54,7 @@ def getModel():
 	model.compile(optimizer='rmsprop', loss='categorical_crossentropy')
 	return model
 
-def generate_data(number_of_games, max_turns, threshold_score, model):
+def generate_data(number_of_games, max_turns, model):
 	# variable initializations for data generation
 	feat_data = []
 	lbl_data = []
@@ -89,7 +87,7 @@ def generate_data(number_of_games, max_turns, threshold_score, model):
 			# if not the first turn, append game state / action
 			# pair to game_memory list
 			if turn > 0:
-				game_memory.append([state, int(action)])
+				game_memory.append([state, int(action), reward])
 			state = obs
 
 			# if simulation completes successfully, break
@@ -98,16 +96,21 @@ def generate_data(number_of_games, max_turns, threshold_score, model):
 
 		# for each playthrough, record obs/action pairs for
 		# steps on which score was above the threshold
-		if score >= threshold_score:
-			if score > best_score:
-				best_score = score
-			for item in game_memory:
+		if score > best_score:
+			best_score = score
+
+		prev_reward = init_reward
+		for item in game_memory:
+			print(item[2])
+			if item[2] >= prev_reward:
 				label = np.array(list(l_1hot))
 				label[item[1]] = 1
 
 				# append each feature and label to respective lists
 				feat_data.append(item[0])
 				lbl_data.append(label)
+
+			prev_reward = item[2]
 
 	# print number of games played through and return data
 	print("{} examples were made.".format(len(feat_data)))
@@ -117,6 +120,7 @@ def generate_data(number_of_games, max_turns, threshold_score, model):
 env = gym.make("LunarLander-v2")
 env.reset()
 # variable initializations
+init_reward = 0.0
 n_actions = env.action_space.n
 nd_states = getStateShape()
 learn_rate = 1.0
