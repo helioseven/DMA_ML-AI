@@ -1,18 +1,30 @@
 import numpy as np
 import gym
 import random
+import sys
+
+def getStateShape():
+	state = env.reset()
+	action = env.action_space.sample()
+	obs, _, _, _ = env.step(action)
+	return np.array(obs).shape
+
+def hashState(inState):
+	newHash = hash(inState.tobytes())
+	newHash = newHash % 2**8
+	return newHash
 
 # start by creating the gym environment
-env = gym.make("Taxi-v2")
+env = gym.make("LunarLander-v2")
 # tons of variable initializations
 n_actions = env.action_space.n
-n_states = env.observation_space.n
-q_table = np.zeros((n_states, n_actions))
+n_states = getStateShape()[0]
+q_table = np.zeros((2**8, n_actions))
 success = False
-threshold = 15.0
+threshold = 200.0
 total_episodes = 50000
 total_test_episodes = 100
-max_steps = 99
+max_steps = 250
 learning_rate = 0.7
 gamma = 0.618
 epsilon = 1.0
@@ -23,6 +35,7 @@ decay_rate = 0.01
 # iterate through episodes
 for episode in range(total_episodes):
 	state = env.reset()
+	state = hashState(state)
 	step = 0
 	score = 0
 	done = False
@@ -36,7 +49,6 @@ for episode in range(total_episodes):
 		if tradeoff > epsilon:
 			# return action from the QTable
 			action = np.argmax(q_table[state,:])
-			print(action)
 		else:
 			# return random action
 			action = env.action_space.sample()
@@ -46,11 +58,11 @@ for episode in range(total_episodes):
 		# render simulation
 		env.render()
 
+		# turn our state variables from floats into integers
+		new_state = hashState(new_state)
 		# add reward from last action to episode score
 		score += reward
 
-		print(state)
-		print(type(state))
 		# update the QTable according to Q-algorithm
 		q_table[state, action] = q_table[state, action] \
 								 + learning_rate \
