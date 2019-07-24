@@ -4,30 +4,17 @@ import numpy as np
 from collections import deque
 import random
 
-import skimage
-from skimage import transform
-from skimage.color import rgb2gray
-
 import keras
 from keras.models import Sequential, Model
 from keras.layers.core import Dense, Dropout, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 from keras.layers import Bidirectional, Activation, Input
 
-# process a raw image frame by cropping, scaling, and normalizing
-def processFrame(frame):
-	gray = rgb2gray(frame)
-	cropped = gray[8:-12, 4:-12]
-	normalized = cropped / 255.0
-	return transform.resize(normalized, [110, 84])
-
 # if first frame of episode, fills stack with new_frame
 # if not first frame, adds new_frame to existing stack
-def stackFrames(stacked_frames, new_frame, new_episode):
+def stackFrames(stacked_frames, frame, new_episode):
 	return_stack = stacked_frames
 	return_state = None
-	# process new_frame
-	frame = processFrame(new_frame)
 
 	# if first frame of the episode, fill the stack with frame
 	if new_episode:
@@ -38,7 +25,7 @@ def stackFrames(stacked_frames, new_frame, new_episode):
 		return_stack.append(frame)
 
 	# build our return state, and return it with the stack
-	return_state = np.stack(return_stack, axis=2)
+	return_state = np.stack(return_stack, axis=1)
 	return return_state, return_stack
 
 # generate a new action based on either random or prediction
@@ -52,11 +39,11 @@ def predictAction(model, decay_step):
 	# if random number is less than tradeoff, generate random action
 	if epsilon > tradeoff:
 		choice = random.randint(1, len(action_codes)) - 1
-	# otherwise, generate action from model.predict()
 	else:
 		# reshape frame_stack to model's desired input shape
 		feats = np.array(frame_stack).reshape(1, *state_space)
-		choice = np.argmax(model.predict(feats))
+		predicts = model.predict(feats)
+		choice = np.argmax(predicts)
 
 	# return the action code associated with choice made
 	return action_codes[choice]
@@ -73,12 +60,9 @@ def sampleMemory(buffered_list, batch_size):
 # defines our keras model for Deep-Q training
 def getModel():
 	model = Sequential()
-	model.add(Conv2D(200, (60, 60),
-		        	 input_shape=state_space))
-	model.add(Conv2D(100, (20, 20)))
 	model.add(Flatten())
-	model.add(Dense(100, activation="relu"))
 	model.add(Dense(50, activation="relu"))
+	model.add(Dense(25, activation="relu"))
 	model.add(Dense(10, activation="relu"))
 	model.add(Dense(action_space, activation="softmax"))
 	opt = keras.optimizers.Adam(lr=learning_rate,
@@ -91,17 +75,16 @@ def getModel():
 
 # main code
 # start by building gym environment
-env = gym.make("SpaceInvaders-v0")
+env = gym.make("LunarLander-v2")
 # ideally state_space is not hard-coded, but it'll do for now
-state_space = (110, 84, 4)
+state_space = (8, 4)
 action_space = env.action_space.n
-# all possible action codes are generated using np.identity()
 action_codes = np.identity(action_space, dtype=np.int).tolist()
 
 # lots of constants
 stack_size = 4
 total_episodes = 10000
-max_steps = 1000
+max_steps = 250
 batch_size = 64
 learning_rate = 0.00025
 gamma = 0.618
@@ -110,19 +93,18 @@ min_epsilon = 0.01
 decay_rate = 0.00001
 decay_step = 0
 # generating a frame stack filled with empty (zeros) images
-blank_imgs = [np.zeros((110, 84), dtype=np.int) \
+blank_frames = [np.zeros((110, 84), dtype=np.int) \
 					   for i in range(stack_size)]
-frame_stack = deque(blank_imgs, maxlen = stack_size)
+frame_stack = deque(blank_frames, maxlen = stack_size)
 # a few other initializations
 terminal_Qs_batch = []
-scores_list = []
+rewards_list = []
 
 # build model, and create memory collection
 model = getModel()
 memory = deque(maxlen=1000)
-# iterate through episodes
 for episode in range(total_episodes):
-	print(episode)
+	print("Episode number: {}".format(episode))
 
 	# reset environment, initialize variables
 	state = env.reset()
@@ -149,9 +131,9 @@ for episode in range(total_episodes):
 		# append empty frame to frame_stack
 		# and append score to scores_list
 		if done == True:
-			obs = np.zeros((110, 84))
+			obs = np.zeros((8, ))
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
-			scores_list.append(score)
+			rewards_list.append(score)
 		# otherwise, simply add current frame to frame_stack
 		else:
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
@@ -186,6 +168,6 @@ for episode in range(total_episodes):
 		# train the model on selected batch
 		model.train_on_batch(x=feats, y=lbls)
 
-	print(score)
+	print("Score for episode {}: {}".format(episode, score))
 
 print("All done!")
