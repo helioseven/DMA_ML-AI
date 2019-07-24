@@ -11,7 +11,7 @@ def getStateShape():
 
 def hashState(inState):
 	newHash = hash(inState.tobytes())
-	newHash = newHash % 2**8
+	newHash = newHash % 2**32
 	return newHash
 
 # start by creating the gym environment
@@ -19,7 +19,7 @@ env = gym.make("LunarLander-v2")
 # tons of variable initializations
 n_actions = env.action_space.n
 n_states = getStateShape()[0]
-q_table = np.zeros((2**8, n_actions))
+q_table = np.zeros((2**32, n_actions))
 success = False
 threshold = 200.0
 total_episodes = 50000

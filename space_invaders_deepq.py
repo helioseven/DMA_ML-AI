@@ -34,15 +34,41 @@ def stackFrames(stacked_frames, new_frame, new_episode):
 	return_state = np.stack(return_stack, axis=2)
 	return return_state, return_stack
 
+def predictAction(model, decay_step, state):
+	tradeoff = np.random.random()
+	epsilon = max_epsilon \
+				   + (min_epsilon - max_epsilon) \
+				   * np.exp(-decay_rate * decay_step)
+
+	if epsilon > tradeoff:
+		choice = random.randint(1, len(action_codes)) - 1
+	else:
+		feats = np.array(frame_stack).reshape(1, *state_space)
+		choice = np.argmax(model.predict(feats))
+
+	return action_codes[choice]
+
+def sampleMemory(buffered_list, batch_size):
+	buffer_size = len(buffered_list)
+	index = np.random.choice(np.arange(buffer_size),
+							 size=batch_size,
+							 replace=False)
+	return [buffered_list[i] for i in index]
+
 env = gym.make("SpaceInvaders-v0")
-state_space = env.observation_space
+# state_space = env.observation_space
+state_space = (4, 110, 84)
 action_space = env.action_space.n
-action_code = np.identity(action_space, dtype=int).tolist()
+action_codes = np.identity(action_space, dtype=np.int).tolist()
 
 stack_size = 4
 blank_imgs = [np.zeros((110, 84), dtype=np.int) \
 					   for i in range(stack_size)]
 frame_stack = deque(blank_imgs, maxlen = stack_size)
+learning_rate = 0.00025
+max_epsilon = 1.0
+min_epsilon = 0.01
+decay_rate = 0.00001
 
 '''
 # testing
