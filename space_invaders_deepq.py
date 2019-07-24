@@ -55,6 +55,23 @@ def sampleMemory(buffered_list, batch_size):
 							 replace=False)
 	return [buffered_list[i] for i in index]
 
+def getModel():
+	model = Sequential()
+	model.add(Input(shape=state_space))
+	model.add(Conv2D(200, (60, 60)))
+	model.add(Conv2D(100, (20, 20)))
+	model.add(Flatten())
+	model.add(Dense(100, activation="relu"))
+	model.add(Dense(50, activation="relu"))
+	model.add(Dense(10, activation="relu"))
+	model.add(Dense(action_space, activation="softmax"))
+	opt = keras.optimizers.Adam(lr=learning_rate,
+								beta_1=min_epsilon,
+								beta_2=max_epsilon,
+								decay=decay_rate)
+	model.compile(optimizer=opt, loss="categorical_crossentropy")
+	return model
+
 env = gym.make("SpaceInvaders-v0")
 # state_space = env.observation_space
 state_space = (4, 110, 84)
@@ -72,19 +89,4 @@ decay_rate = 0.00001
 
 '''
 # testing
-env.reset()
-obs, _, _, _ = env.step(env.action_space.sample())
-frame = processFrame(obs)
-result1, result2 = stackFrames(frame_stack, frame, True)
-print(result1)
-print(type(result1))
-print(result2)
-print(type(result2))
-obs, _, _, _ = env.step(env.action_space.sample())
-frame = processFrame(obs)
-result1, result2 = stackFrames(frame_stack, frame, False)
-print(result1)
-print(type(result1))
-print(result2)
-print(type(result2))
 '''
