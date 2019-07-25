@@ -23,19 +23,13 @@ def processFrame(frame):
 
 # if first frame of episode, fills stack with new_frame
 # if not first frame, adds new_frame to existing stack
-def stackFrames(stacked_frames, new_frame, new_episode):
+def stackFrames(stacked_frames, new_frame):
 	return_stack = stacked_frames
 	return_state = None
 	# process new_frame
 	frame = processFrame(new_frame)
-
-	# if first frame of the episode, fill the stack with frame
-	if new_episode:
-		for _ in range(stack_size):
-			return_stack.append(frame)
-	# otherwise, add frame to stack once
-	else:
-		return_stack.append(frame)
+	# simply append frame to frame_stack
+	return_stack.append(frame)
 
 	# build our return state, and return it with the stack
 	return_state = np.stack(return_stack, axis=2)
@@ -113,9 +107,6 @@ decay_step = 0
 blank_imgs = [np.zeros((110, 84), dtype=np.int) \
 					   for i in range(stack_size)]
 frame_stack = deque(blank_imgs, maxlen = stack_size)
-# a few other initializations
-terminal_Qs_batch = []
-scores_list = []
 
 # build model, and create memory collection
 model = getModel()
@@ -127,7 +118,7 @@ for episode in range(total_episodes):
 	# reset environment, initialize variables
 	state = env.reset()
 	score = 0
-	state, frame_stack = stackFrames(frame_stack, state, True)
+	state, frame_stack = stackFrames(frame_stack, state)
 
 	# iterate through steps in the episode
 	for step in range(max_steps):
@@ -150,14 +141,13 @@ for episode in range(total_episodes):
 		# and append score to scores_list
 		if done == True:
 			obs = np.zeros((110, 84))
-			obs, frame_stack = stackFrames(frame_stack, obs, False)
-			scores_list.append(score)
+			obs, frame_stack = stackFrames(frame_stack, obs)
 		# otherwise, simply add current frame to frame_stack
 		else:
-			obs, frame_stack = stackFrames(frame_stack, obs, False)
+			obs, frame_stack = stackFrames(frame_stack, obs)
 
 		# either way, compile memory and add it to collection
-		memory.append((state, action, reward, obs, done))
+		memory.append((state, action, reward))
 		# set state for next iteration
 		state = obs
 
