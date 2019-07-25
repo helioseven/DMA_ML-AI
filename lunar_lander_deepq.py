@@ -6,6 +6,7 @@ import random
 
 import keras
 from keras.models import Sequential, Model
+from keras.layers import Conv2D
 from keras.layers.core import Dense, Dropout, Flatten
 
 # if first frame of episode, fills stack with new_frame
@@ -39,7 +40,7 @@ def predictAction(model, decay_step):
 		choice = random.randint(1, len(action_codes)) - 1
 	else:
 		# reshape frame_stack to model's desired input shape
-		feats = np.array(frame_stack).reshape(1, *state_space)
+		feats = np.array(frame_stack).reshape(1, *state_space, 1)
 		predicts = model.predict(feats)
 		choice = np.argmax(predicts)
 
@@ -58,7 +59,8 @@ def sampleMemory(buffered_list, batch_size):
 # defines our keras model for Deep-Q training
 def getModel():
 	model = Sequential()
-	# something ought to go here
+	model.add(Conv2D(100, (2, 1),
+					 input_shape=(*state_space, 1)))
 	model.add(Flatten())
 	model.add(Dense(50, activation="relu"))
 	model.add(Dense(25, activation="relu"))
@@ -76,13 +78,13 @@ def getModel():
 # start by building gym environment
 env = gym.make("LunarLander-v2")
 # ideally state_space is not hard-coded, but it'll do for now
-state_space = (8, 4)
+state_space = (8, 10)
 action_space = env.action_space.n
 action_codes = np.identity(action_space, dtype=np.int).tolist()
 
 # lots of constants
 success = False
-stack_size = 4
+stack_size = 10
 total_episodes = 10000
 max_steps = 250
 batch_size = 64
