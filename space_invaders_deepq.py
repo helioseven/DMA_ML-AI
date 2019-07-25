@@ -39,6 +39,7 @@ def stackFrames(stacked_frames, new_frame, new_episode):
 
 	# build our return state, and return it with the stack
 	return_state = np.stack(return_stack, axis=2)
+	print(np.array(return_stack).shape)
 	return return_state, return_stack
 
 # generate a new action based on either random or prediction
@@ -113,9 +114,6 @@ decay_step = 0
 blank_imgs = [np.zeros((110, 84), dtype=np.int) \
 					   for i in range(stack_size)]
 frame_stack = deque(blank_imgs, maxlen = stack_size)
-# a few other initializations
-terminal_Qs_batch = []
-scores_list = []
 
 # build model, and create memory collection
 model = getModel()
@@ -141,7 +139,6 @@ for episode in range(total_episodes):
 
 		# apply action to step the environment
 		obs, reward, done, _ = env.step(action)
-
 		# add received reward to episode score
 		score += reward
 
@@ -151,7 +148,6 @@ for episode in range(total_episodes):
 		if done == True:
 			obs = np.zeros((110, 84))
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
-			scores_list.append(score)
 		# otherwise, simply add current frame to frame_stack
 		else:
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
