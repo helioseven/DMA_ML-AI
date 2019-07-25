@@ -7,8 +7,6 @@ import random
 import keras
 from keras.models import Sequential, Model
 from keras.layers.core import Dense, Dropout, Flatten
-from keras.layers import Conv2D, MaxPooling2D
-from keras.layers import Bidirectional, Activation, Input
 
 # if first frame of episode, fills stack with new_frame
 # if not first frame, adds new_frame to existing stack
@@ -60,6 +58,7 @@ def sampleMemory(buffered_list, batch_size):
 # defines our keras model for Deep-Q training
 def getModel():
 	model = Sequential()
+	# something ought to go here
 	model.add(Flatten())
 	model.add(Dense(50, activation="relu"))
 	model.add(Dense(25, activation="relu"))
@@ -82,6 +81,7 @@ action_space = env.action_space.n
 action_codes = np.identity(action_space, dtype=np.int).tolist()
 
 # lots of constants
+success = False
 stack_size = 4
 total_episodes = 10000
 max_steps = 250
@@ -96,19 +96,14 @@ decay_step = 0
 blank_frames = [np.zeros((110, 84), dtype=np.int) \
 					   for i in range(stack_size)]
 frame_stack = deque(blank_frames, maxlen = stack_size)
-# a few other initializations
-terminal_Qs_batch = []
-rewards_list = []
 
 # build model, and create memory collection
 model = getModel()
 memory = deque(maxlen=1000)
 for episode in range(total_episodes):
-	print("Episode number: {}".format(episode))
-
 	# reset environment, initialize variables
 	state = env.reset()
-	score = 0
+	score = 0.0
 	state, frame_stack = stackFrames(frame_stack, state, True)
 
 	# iterate through steps in the episode
@@ -127,13 +122,13 @@ for episode in range(total_episodes):
 		# add received reward to episode score
 		score += reward
 
-		# if the last frame of the episode,
-		# append empty frame to frame_stack
-		# and append score to scores_list
+		# if the last frame of the episode, flag success,
+		# and append empty frame to frame_stack
 		if done == True:
-			obs = np.zeros((8, ))
+			if reward >= 200.0:
+				success = True
+			obs = np.zeros((8,))
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
-			rewards_list.append(score)
 		# otherwise, simply add current frame to frame_stack
 		else:
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
