@@ -18,6 +18,11 @@ from keras.layers import Bidirectional, Activation, Input
 stack_size= 6
 batch_size = 64
 gamma = 0.618
+max_epsilon = 1.0
+min_epsilon = 0.01
+decay_rate = 0.00001
+decay_step = 0
+learning_rate = 0.00025 
 
 # process a raw image frame by cropping, scaling, and normalizing(2)
 def processFrame(frame):
@@ -37,10 +42,10 @@ def stackFrames(stacked_frames, new_frame):
 	return_state = np.stack(return_stack, axis=2)
 	return return_state, return_stack
 
-def predictAction(model):
+def predictAction(model, decay_step):
 	tradeoff = np.random.random()
 
-	if 0.5>tradeoff:
+	if epsilon > tradeoff:
 		choice = random.ranint(1, len(action_codes)) - 1
 
 	else:
@@ -64,7 +69,10 @@ def getModel():
 	model.add(Dense(50, activation="relu"))
 	model.add(Dense(10, activation="relu"))
 	model.add(Dense(action_space, activation="softmax"))
-	opt = keras.optimizers.Adam()
+	opt = keras.optimizers.Adam(lr=learning_rate,
+								beta_1=min_epsilon,
+								beta_2=max_epsilon,
+								decay=decay_rate)
 	model.compile(optimizer=opt, loss="categorical_crossentropy")
 	return model
 
@@ -93,7 +101,7 @@ for episode in range(1000):
 	state, frame_stack = stackFrames(frame_stack, state)
 
 	for step in range(500):
-		env.render()
+		#env.render()
 		#generate random action
 		action = env.action_space.sample()
 		#apply the action to step env
