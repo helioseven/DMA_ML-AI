@@ -74,6 +74,7 @@ def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, 
         ## TODO: Break actions down to increments, and then predict rewards based on that
         # for each 16 numbers, find the argmax
         predictions = model.predict(feats)
+        print(predictions)
         #print(predictions)
 
         predictions = predictions.reshape(int(2/step_size), 4)
@@ -224,7 +225,7 @@ for i in range(episodes):
             targets = [gamma * np.max(item) for item in predicts]
             targets = [targets[i] + rewards[i] for i in range(len(targets))]
             states = states.reshape(*states.shape, 1)
-            target_fit = [item for item in np.array(model.predict(states)).reshape(-1, 4, 16)]
+            target_fit = [item for item in np.array(model.predict(states)).reshape(-1, 4, int(2/step_size))]
 
             for i in range(batch_size):
                 code = argmax_2d(actions[i])
@@ -232,7 +233,7 @@ for i in range(episodes):
                     target_fit[i][k] = targets[i]
 
             feats = np.array(states).reshape(-1, 24, stack_size, 1)
-            labels = np.array(target_fit).reshape(-1, 4, 16)
+            labels = np.array(target_fit).reshape(-1, 4, int(2/step_size))
 
             model.train_on_batch(x=feats, y=labels)
 
