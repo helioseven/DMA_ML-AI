@@ -31,7 +31,7 @@ def processFrame(frame):
 
 	gray = rgb2gray(frame)
 	normalized = gray / 255.0
-	return normalized
+	return transform.resize(normalized, [100,80])
 
 #start using frames in episodes and stack them
 def stackFrames(stacked_frames, new_frame):
@@ -84,7 +84,7 @@ def getModel():
 
 #create gym environment.    - basic structure(1)
 env = gym.make("Breakout-v0")
-state_space = (210, 160, stack_size)
+state_space = (100, 80, stack_size)
 action_space = env.action_space.n
 action_codes = np.identity(action_space, dtype=np.int).tolist()
 
@@ -92,7 +92,7 @@ action_codes = np.identity(action_space, dtype=np.int).tolist()
 	#print(action_space)
 
 # generating a frame stack filled with empty (zeros) images
-blank_imgs = [np.zeros((210, 160), dtype=np.int) \
+blank_imgs = [np.zeros((100, 80), dtype=np.int) \
 					   for i in range(stack_size)]
 frame_stack = deque(blank_imgs, maxlen = stack_size)
 
@@ -105,12 +105,12 @@ model = getModel()
 memory = deque(maxlen=1000)
 success = False
 
-for episode in range(1000):
+for episode in range(100):
 	state = env.reset()
 	score = 0
 	state, frame_stack = stackFrames(frame_stack, state)
 
-	for step in range(500):
+	for step in range(250):
 		#env.render()
 
 
@@ -127,11 +127,12 @@ for episode in range(1000):
 		if done ==True:
 			if score > 10:
 				success = True
-				break
 			obs = np.zeros((210, 160))
 			obs, frame_stack = stackFrames(frame_stack, obs)
 
 			scores_list.append(score)
+			
+			break
 
 		else:
 			obs, frame_stack = stackFrames(frame_stack, obs)
@@ -176,7 +177,7 @@ if success:
 else:
 	print("Failure.")
 
-
+print(scores_list)
 makeGraph(scores_list)
 
 
