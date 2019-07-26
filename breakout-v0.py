@@ -87,7 +87,7 @@ model = getModel()
 memory = deque(maxlen=1000)
 success = False
 
-for episode in ranger(1000):
+for episode in range(1000):
 	state = env.reset()
 	score = 0
 	state, frame_stack = stackFrames(frame_stack, state)
