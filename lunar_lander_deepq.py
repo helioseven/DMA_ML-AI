@@ -111,7 +111,7 @@ for episode in range(total_episodes):
 	# iterate through steps in the episode
 	for step in range(max_steps):
 		# render, so we can watch
-		env.render()
+#		env.render()
 		# increment decay_step to update epsilon
 		decay_step += 1
 
