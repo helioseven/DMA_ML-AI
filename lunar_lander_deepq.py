@@ -8,6 +8,8 @@ import keras
 from keras.models import Sequential, Model
 from keras.layers.core import Dense, Dropout, Flatten
 
+from my_util import makeGraph
+
 # if first frame of episode, fills stack with new_frame
 # if not first frame, adds new_frame to existing stack
 def stackFrames(stacked_frames, frame, new_episode):
@@ -28,19 +30,23 @@ def stackFrames(stacked_frames, frame, new_episode):
 
 # generate a new action based on either random or prediction
 def predictAction(model, decay_step):
+	# random number to compare to epsilon
 	tradeoff = np.random.random()
 	# update epsilon based on decay_step
 	epsilon = max_epsilon \
 				   + (min_epsilon - max_epsilon) \
 				   * np.exp(-decay_rate * decay_step)
 
-	# if random number is less than tradeoff, generate random action
 	if epsilon > tradeoff:
+		# in early training, generate mostly random moves
 		choice = random.randint(1, len(action_codes)) - 1
 	else:
-		# reshape frame_stack to model's desired input shape
+		# as epsilon decays, more moves are based on predicted rewards
+		# first, reshape frame_stack to model's desired input shape
 		feats = np.array(frame_stack).reshape(1, *state_space)
+		# generate predictions based on frame_stack features
 		predicts = model.predict(feats)
+		# generate a choice (index) based on predicted rewards
 		choice = np.argmax(predicts)
 
 	# return the action code associated with choice made
@@ -100,6 +106,7 @@ frame_stack = deque(blank_frames, maxlen = stack_size)
 # build model, and create memory collection
 model = getModel()
 memory = deque(maxlen=1000)
+score_list = []
 for episode in range(total_episodes):
 	# reset environment, initialize variables
 	state = env.reset()
@@ -135,9 +142,11 @@ for episode in range(total_episodes):
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
 
 		# either way, compile memory and add it to collection
-		memory.append((state, action, reward, obs, done))
+		memory.append((state, action, reward))
 		# set state for next iteration
 		state = obs
+
+	score_list.append(score)
 
 	if success:
 		break
@@ -168,6 +177,8 @@ for episode in range(total_episodes):
 		model.train_on_batch(x=feats, y=lbls)
 
 	print("Score for episode {}: {}".format(episode, score))
+
+makeGraph(score_list)
 
 if success:
 	print("We win!")
