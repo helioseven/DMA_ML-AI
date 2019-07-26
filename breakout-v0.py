@@ -14,6 +14,8 @@ from keras.layers.core import Dense, Dropout, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 from keras.layers import Bidirectional, Activation, Input
 
+from my_util import makeGraph
+
 #constants
 stack_size= 6
 batch_size = 64
@@ -45,8 +47,12 @@ def stackFrames(stacked_frames, new_frame):
 def predictAction(model, decay_step):
 	tradeoff = np.random.random()
 
+	epsilon = max_epsilon \
+				   + (min_epsilon - max_epsilon) \
+				   * np.exp(-decay_rate * decay_step)
+
 	if epsilon > tradeoff:
-		choice = random.ranint(1, len(action_codes)) - 1
+		choice = random.randint(1, len(action_codes)) - 1
 
 	else:
 		feats = np.array(frame_stack).reshape(1, *state_space) # * unpacks tuple or list
@@ -90,6 +96,10 @@ blank_imgs = [np.zeros((210, 160), dtype=np.int) \
 					   for i in range(stack_size)]
 frame_stack = deque(blank_imgs, maxlen = stack_size)
 
+
+scores_list = []
+
+
 #build model and memory
 model = getModel()
 memory = deque(maxlen=1000)
@@ -102,8 +112,12 @@ for episode in range(1000):
 
 	for step in range(500):
 		#env.render()
+
+
+		decay_step += 1
 		#generate random action
-		action = env.action_space.sample()
+		action = np.argmax(predictAction(model, decay_step))
+
 		#apply the action to step env
 		obs, reward, done, _ = env.step(action) #basic structure
 
@@ -116,6 +130,9 @@ for episode in range(1000):
 				break
 			obs = np.zeros((210, 160))
 			obs, frame_stack = stackFrames(frame_stack, obs)
+
+			scores_list.append(score)
+
 		else:
 			obs, frame_stack = stackFrames(frame_stack, obs)
 
@@ -158,6 +175,10 @@ if success:
 	print("Success!")
 else:
 	print("Failure.")
+
+
+makeGraph(scores_list)
+
 
 
 #loop that goes throught al; the epidosdes
