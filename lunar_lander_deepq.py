@@ -3,11 +3,14 @@ import pandas as pd
 import numpy as np
 from collections import deque
 import random
+import copy
 
 import keras
 from keras.models import Sequential, Model
 from keras.layers import Conv2D
 from keras.layers.core import Dense, Dropout, Flatten
+
+from my_util import makeGraph
 
 # if first frame of episode, fills stack with new_frame
 # if not first frame, adds new_frame to existing stack
@@ -59,7 +62,7 @@ def sampleMemory(buffered_list, batch_size):
 # defines our keras model for Deep-Q training
 def getModel():
 	model = Sequential()
-	model.add(Conv2D(100, (2, 1),
+	model.add(Conv2D(100, (1, 4),
 					 input_shape=(*state_space, 1)))
 	model.add(Flatten())
 	model.add(Dense(50, activation="relu"))
@@ -102,6 +105,7 @@ frame_stack = deque(blank_frames, maxlen = stack_size)
 # build model, and create memory collection
 model = getModel()
 memory = deque(maxlen=1000)
+score_list = []
 for episode in range(total_episodes):
 	# reset environment, initialize variables
 	state = env.reset()
@@ -140,17 +144,24 @@ for episode in range(total_episodes):
 		# set state for next iteration
 		state = obs
 
+	score_list.append(score)
+
+	if success:
+		break
+
 	# after each episode, do training if more than 100 memories
 	if len(memory) > 100:
 		# first, separate memory into component data items
 		batch = sampleMemory(memory, batch_size)
+		states = np.array([item[0] for item in batch])
+		states = states.reshape(batch_size, *state_space, 1)
+		next_states = copy.deepcopy(states)
 		actions = [item[1] for item in batch]
-		states = np.array([item[0] for item in batch], ndmin=3)
 		rewards = [item[2] for item in batch]
-		next_states = np.array([item[0] for item in batch], ndmin=3)
 
-		# generate expected outcomes for predictions
+		# generate expected rewards for selected states
 		predicts = model.predict(next_states)
+		# 
 		targets = [gamma * np.max(item) for item in predicts]
 		targets = [targets[i] + rewards[i] for i in range(len(targets))]
 		target_fit = [item for item in model.predict(states)]
@@ -160,11 +171,13 @@ for episode in range(total_episodes):
 			target_fit[i][actions[i]] = targets[i]
 
 		# format features and labels for training
-		feats = np.array(states).reshape(-1, *state_space)
+		feats = np.array(states).reshape(-1, *state_space, 1)
 		lbls = np.array(target_fit).reshape(-1, action_space)
 		# train the model on selected batch
 		model.train_on_batch(x=feats, y=lbls)
 
 	print("Score for episode {}: {}".format(episode, score))
+
+makeGraph(score_list)
 
 print("All done!")
