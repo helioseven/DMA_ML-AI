@@ -141,7 +141,6 @@ for episode in range(total_episodes):
 		if done == True:
 			if reward >= 200.0:
 				success = True
-				break
 			obs = np.zeros((8,))
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
 			break
