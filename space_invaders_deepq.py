@@ -16,6 +16,7 @@ from keras.layers import Bidirectional, Activation, Input
 
 # process a raw image frame by cropping, scaling, and normalizing
 def processFrame(frame):
+	print(frame)
 	gray = rgb2gray(frame)
 	cropped = gray[8:-12, 4:-12]
 	normalized = cropped / 255.0
