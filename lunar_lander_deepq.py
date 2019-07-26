@@ -62,10 +62,9 @@ def sampleMemory(buffered_list, batch_size):
 # defines our keras model for Deep-Q training
 def getModel():
 	model = Sequential()
-	model.add(Conv2D(100, (1, 3),
+	model.add(Conv2D(100, (1, 8),
 					 input_shape=(*state_space, 1)))
-	model.add(Conv2D(75, (1, 3)))
-	model.add(Conv2D(50, (1, 3)))
+	model.add(Conv2D(75, (1, 8)))
 	model.add(Flatten())
 	model.add(Dense(50, activation="relu"))
 	model.add(Dense(25, activation="relu"))
@@ -85,10 +84,10 @@ env = gym.make("LunarLander-v2")
 
 # lots of constants
 success = False
-stack_size = 7
+stack_size = 15
 total_episodes = 10000
 max_steps = 250
-batch_size = 64
+batch_size = 256
 learning_rate = 0.00025
 gamma = 0.618
 max_epsilon = 1.0
@@ -109,7 +108,7 @@ frame_stack = deque(blank_frames, maxlen = stack_size)
 
 # build model, and create memory collection
 model = getModel()
-memory = deque(maxlen=1000)
+memory = deque(maxlen=250000)
 score_list = []
 for episode in range(total_episodes):
 	# reset environment, initialize variables
@@ -156,7 +155,7 @@ for episode in range(total_episodes):
 		break
 
 	# after each episode, do training if more than 100 memories
-	if len(memory) > 100:
+	if len(memory) > 500:
 		# first, separate memory into component data items
 		batch = sampleMemory(memory, batch_size)
 		states = np.array([item[0] for item in batch])
