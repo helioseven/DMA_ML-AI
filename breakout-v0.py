@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from collections import deque
 import random
+import os.path
+import csv
 
 import skimage
 from skimage import transform
@@ -103,6 +105,10 @@ scores_list = []
 #build model and memory
 model = getModel()
 memory = deque(maxlen=1000)
+if os.path.isfile("memories.csv"):
+	with open("memories.csv", "r") as f:
+		reader = csv.reader(f)
+		memory = list(reader)
 success = False
 
 for episode in range(100):

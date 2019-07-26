@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 from __future__ import print_function
+from collections import deque
 
-import sys, gym, time
+import sys, gym, time, csv
 
 #
 # Test yourself as a learning agent! Pass environment name as a command-line argument, for example:
@@ -9,6 +10,7 @@ import sys, gym, time
 # python keyboard_agent.py SpaceInvadersNoFrameskip-v4
 #
 
+memory = deque(maxlen=10000)
 env = gym.make('LunarLander-v2' if len(sys.argv)<2 else sys.argv[1])
 
 if not hasattr(env.action_space, 'n'):
@@ -57,6 +59,7 @@ def rollout(env):
             skip -= 1
 
         obser, r, done, info = env.step(a)
+        memory.append((obser, a, r))
         if r != 0:
             print("reward %0.3f" % r)
         total_reward += r
@@ -77,3 +80,7 @@ print("No keys pressed is taking action 0")
 while 1:
     window_still_open = rollout(env)
     if window_still_open==False: break
+
+with open("memories.csv", 'w') as myfile:
+     wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+     wr.writerow(memory)
