@@ -127,6 +127,7 @@ for episode in range(total_episodes):
 		if done == True:
 			if reward >= 200.0:
 				success = True
+				break
 			obs = np.zeros((8,))
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
 		# otherwise, simply add current frame to frame_stack
@@ -137,6 +138,9 @@ for episode in range(total_episodes):
 		memory.append((state, action, reward, obs, done))
 		# set state for next iteration
 		state = obs
+
+	if success:
+		break
 
 	# after each episode, do training if more than 100 memories
 	if len(memory) > 100:
@@ -165,4 +169,7 @@ for episode in range(total_episodes):
 
 	print("Score for episode {}: {}".format(episode, score))
 
-print("All done!")
+if success:
+	print("We win!")
+else:
+	print("We lose...")
