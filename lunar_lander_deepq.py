@@ -3,9 +3,11 @@ import pandas as pd
 import numpy as np
 from collections import deque
 import random
+import copy
 
 import keras
 from keras.models import Sequential, Model
+from keras.layers import Conv2D
 from keras.layers.core import Dense, Dropout, Flatten
 
 from my_util import makeGraph
@@ -43,7 +45,7 @@ def predictAction(model, decay_step):
 	else:
 		# as epsilon decays, more moves are based on predicted rewards
 		# first, reshape frame_stack to model's desired input shape
-		feats = np.array(frame_stack).reshape(1, *state_space)
+		feats = np.array(frame_stack).reshape(1, *state_space, 1)
 		# generate predictions based on frame_stack features
 		predicts = model.predict(feats)
 		# generate a choice (index) based on predicted rewards
@@ -64,7 +66,9 @@ def sampleMemory(buffered_list, batch_size):
 # defines our keras model for Deep-Q training
 def getModel():
 	model = Sequential()
-	# something ought to go here
+	model.add(Conv2D(100, (1, 8),
+					 input_shape=(*state_space, 1)))
+	model.add(Conv2D(75, (1, 8)))
 	model.add(Flatten())
 	model.add(Dense(50, activation="relu"))
 	model.add(Dense(25, activation="relu"))
@@ -81,23 +85,26 @@ def getModel():
 # main code
 # start by building gym environment
 env = gym.make("LunarLander-v2")
-# ideally state_space is not hard-coded, but it'll do for now
-state_space = (8, 4)
-action_space = env.action_space.n
-action_codes = np.identity(action_space, dtype=np.int).tolist()
 
 # lots of constants
 success = False
-stack_size = 4
+stack_size = 15
 total_episodes = 10000
 max_steps = 250
-batch_size = 64
+batch_size = 256
 learning_rate = 0.00025
 gamma = 0.618
 max_epsilon = 1.0
 min_epsilon = 0.01
 decay_rate = 0.00001
 decay_step = 0
+
+# figure out size of state and action spaces
+state_space = (8, stack_size)
+action_space = env.action_space.n
+# generate an array of all possible action codes (1-hot encoding)
+action_codes = np.identity(action_space, dtype=np.int).tolist()
+
 # generating a frame stack filled with empty (zeros) images
 blank_frames = [np.zeros((110, 84), dtype=np.int) \
 					   for i in range(stack_size)]
@@ -105,7 +112,7 @@ frame_stack = deque(blank_frames, maxlen = stack_size)
 
 # build model, and create memory collection
 model = getModel()
-memory = deque(maxlen=1000)
+memory = deque(maxlen=250000)
 score_list = []
 for episode in range(total_episodes):
 	# reset environment, initialize variables
@@ -116,7 +123,7 @@ for episode in range(total_episodes):
 	# iterate through steps in the episode
 	for step in range(max_steps):
 		# render, so we can watch
-		env.render()
+#		env.render()
 		# increment decay_step to update epsilon
 		decay_step += 1
 
@@ -137,6 +144,7 @@ for episode in range(total_episodes):
 				break
 			obs = np.zeros((8,))
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
+			break
 		# otherwise, simply add current frame to frame_stack
 		else:
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
@@ -152,16 +160,18 @@ for episode in range(total_episodes):
 		break
 
 	# after each episode, do training if more than 100 memories
-	if len(memory) > 100:
+	if len(memory) > 500:
 		# first, separate memory into component data items
 		batch = sampleMemory(memory, batch_size)
+		states = np.array([item[0] for item in batch])
+		states = states.reshape(batch_size, *state_space, 1)
+		next_states = copy.deepcopy(states)
 		actions = [item[1] for item in batch]
-		states = np.array([item[0] for item in batch], ndmin=3)
 		rewards = [item[2] for item in batch]
-		next_states = np.array([item[0] for item in batch], ndmin=3)
 
-		# generate expected outcomes for predictions
+		# generate expected rewards for selected states
 		predicts = model.predict(next_states)
+		# 
 		targets = [gamma * np.max(item) for item in predicts]
 		targets = [targets[i] + rewards[i] for i in range(len(targets))]
 		target_fit = [item for item in model.predict(states)]
@@ -171,7 +181,7 @@ for episode in range(total_episodes):
 			target_fit[i][actions[i]] = targets[i]
 
 		# format features and labels for training
-		feats = np.array(states).reshape(-1, *state_space)
+		feats = np.array(states).reshape(-1, *state_space, 1)
 		lbls = np.array(target_fit).reshape(-1, action_space)
 		# train the model on selected batch
 		model.train_on_batch(x=feats, y=lbls)
