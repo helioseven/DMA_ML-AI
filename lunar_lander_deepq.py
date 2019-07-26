@@ -62,8 +62,10 @@ def sampleMemory(buffered_list, batch_size):
 # defines our keras model for Deep-Q training
 def getModel():
 	model = Sequential()
-	model.add(Conv2D(100, (1, 4),
+	model.add(Conv2D(100, (1, 3),
 					 input_shape=(*state_space, 1)))
+	model.add(Conv2D(75, (1, 3)))
+	model.add(Conv2D(50, (1, 3)))
 	model.add(Flatten())
 	model.add(Dense(50, activation="relu"))
 	model.add(Dense(25, activation="relu"))
@@ -80,14 +82,10 @@ def getModel():
 # main code
 # start by building gym environment
 env = gym.make("LunarLander-v2")
-# ideally state_space is not hard-coded, but it'll do for now
-state_space = (8, 10)
-action_space = env.action_space.n
-action_codes = np.identity(action_space, dtype=np.int).tolist()
 
 # lots of constants
 success = False
-stack_size = 10
+stack_size = 7
 total_episodes = 10000
 max_steps = 250
 batch_size = 64
@@ -97,6 +95,13 @@ max_epsilon = 1.0
 min_epsilon = 0.01
 decay_rate = 0.00001
 decay_step = 0
+
+# figure out size of state and action spaces
+state_space = (8, stack_size)
+action_space = env.action_space.n
+# generate an array of all possible action codes (1-hot encoding)
+action_codes = np.identity(action_space, dtype=np.int).tolist()
+
 # generating a frame stack filled with empty (zeros) images
 blank_frames = [np.zeros((110, 84), dtype=np.int) \
 					   for i in range(stack_size)]
@@ -135,12 +140,13 @@ for episode in range(total_episodes):
 				success = True
 			obs = np.zeros((8,))
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
+			break
 		# otherwise, simply add current frame to frame_stack
 		else:
 			obs, frame_stack = stackFrames(frame_stack, obs, False)
 
 		# either way, compile memory and add it to collection
-		memory.append((state, action, reward, obs, done))
+		memory.append((state, action, reward))
 		# set state for next iteration
 		state = obs
 
