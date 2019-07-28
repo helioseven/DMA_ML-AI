@@ -23,6 +23,7 @@ def stack_observations(obs, previous_stack, stack_size, new_episode):
         del new_stack[0]
         new_stack.append(obs)
 
+
     state = np.stack(new_stack, axis=1)
     return new_stack, state
 
@@ -71,7 +72,6 @@ def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, 
         choice = [choice1, ..., choice4]
         '''
 
-        ## TODO: Break actions down to increments, and then predict rewards based on that
         # for each 16 numbers, find the argmax
         predictions = model.predict(feats)
         print(predictions)
@@ -170,7 +170,6 @@ for i in range(episodes):
             env.render()
         decay_step += 1
 
-        # FIXME: fix predict_action function
         action = predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size)
         '''
         final_action = []
@@ -200,15 +199,6 @@ for i in range(episodes):
             states = np.array([item[0] for item in batch])
             print("Mark 2: {}".format(states.shape))
             #print(states.shape)
-            '''
-            states = list(states)
-            for i in range(len(states)):
-                if type(states[i]) != type([]):
-                    states[i] = list(states[i])
-                for j in range(len(states[i])):
-                    if type(states[i][j]) != type([]):
-                        states[i][j] = list(states[i][j])
-            '''
 
             #print(states)
             #print(states_np.shape)
