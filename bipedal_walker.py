@@ -74,7 +74,6 @@ def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, 
 
         # for each 16 numbers, find the argmax
         predictions = model.predict(feats)
-        print(predictions)
         #print(predictions)
 
         predictions = predictions.reshape(int(2/step_size), 4)
@@ -131,12 +130,12 @@ show_render = False
 possible_actions = []
 for i in range(int(2/step_size)+1):
     possible_actions.append(step_size*i-1)
-print(possible_actions)
 ####################
 scores = []
 decay_step = 0
 
 env = gym.make('BipedalWalker-v2')
+print(env.observation_space.shape)
 obs = env.reset()
 
 state_space = obs.shape[0]
@@ -166,8 +165,7 @@ for i in range(episodes):
     obs_stack, state = stack_observations(state, None, stack_size, True)
 
     for j in range(max_steps):
-        if (i+1)%500 == 0:
-            env.render()
+        #env.render()
         decay_step += 1
 
         action = predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size)
@@ -194,10 +192,10 @@ for i in range(episodes):
         state = obs
 
         if len(memory) > 500:
-            print("Training")
+            #print("Training")
             batch = sample_memory(memory, batch_size)
             states = np.array([item[0] for item in batch])
-            print("Mark 2: {}".format(states.shape))
+            #print("Mark 2: {}".format(states.shape))
             #print(states.shape)
 
             #print(states)
@@ -223,12 +221,13 @@ for i in range(episodes):
                     target_fit[i][k] = targets[i]
 
             feats = np.array(states).reshape(-1, 24, stack_size, 1)
-            labels = np.array(target_fit).reshape(-1, 4, int(2/step_size))
-
+            labels = np.array(target_fit).reshape(-1, 4*int(2/step_size))
+            #print("Features: "+str(feats.shape))
+            #print("Labels: "+str(labels.shape))
             model.train_on_batch(x=feats, y=labels)
 
     scores.append(score)
-    print(score)
+    #print(score)
 
 model.save(path+"trained_model/bipedal_walker_model.h5")
 fig = graph_results(scores)
