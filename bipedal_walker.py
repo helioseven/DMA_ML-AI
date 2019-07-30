@@ -48,19 +48,21 @@ def load_model():
     model = tf.keras.models.load_model(path+"trained_model/bipedal_walker_model.h5")
     return model
 
-def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size):
+# FIXME: predict_action almost consistantly returning the same values
+def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size, previous_prediction=None):
     nb_random = np.random.random()
     epsilon = max_epsilon + (min_epsilon - max_epsilon) * np.exp(-decay_rate * decay_step)
 
-    if epsilon > 1:
-    #if epsilon > nb_random:
+    #if epsilon > 1:
+    if epsilon > nb_random:
         # make input random
 
-        prediction = np.array(nb_action)
+        predictions = np.array(nb_action)
+        #print(predictions)
 
         for i in range(len(nb_action)):
             for j in range(len(nb_action[i])):
-                prediction[i][j] = random.randint(1, len(nb_action[i]))-1
+                predictions[i][j] = random.randint(1, len(nb_action[i]))-1
     else:
         # use model to predict
         feats = np.array(obs_stack).reshape(1, 24, stack_size, 1)
@@ -75,16 +77,18 @@ def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, 
         # for each 16 numbers, find the argmax
         predictions = model.predict(feats)
         #print(predictions)
-
         predictions = predictions.reshape(int(2/step_size), 4)
 
+    #print(np.linalg.norm([previous_prediction.flatten(), predictions.flatten()]))
     choice = []
     for i in range(len(nb_action)):
         choice.append(np.argmax(predictions[i]))
     output = []
     for i in range(len(choice)):
         output.append(action_codes[i][int(choice[i])])
-    return output
+
+    #print(predictions)
+    return output, predictions
 
 def sample_memory(buffered_list, batch_size):
     buffer_size = len(buffered_list)
@@ -115,7 +119,8 @@ episodes = 10000
 max_steps = 1000
 stack_size = 15
 
-learning_rate = 0.00025
+#learning_rate = 0.00025
+learning_rate = 0.0001
 decay_rate = 0.00001
 min_epsilon = 0.01
 max_epsilon = 1
@@ -123,7 +128,7 @@ max_epsilon = 1
 batch_size = 64
 gamma = 0.618
 
-step_size = 0.125
+step_size = 0.0625
 
 show_render = False
 
@@ -135,12 +140,12 @@ scores = []
 decay_step = 0
 
 env = gym.make('BipedalWalker-v2')
-print(env.observation_space.shape)
 obs = env.reset()
 
 state_space = obs.shape[0]
 
 nb_action = [[0]*int(2/step_size)]*env.action_space.shape[0]
+previous_prediction = (np.array([[0]*int(2/step_size)]*env.action_space.shape[0])).flatten()
 
 action_codes = copy.deepcopy(nb_action)
 for i in range(len(action_codes)):
@@ -167,14 +172,14 @@ for i in range(episodes):
     for j in range(max_steps):
         #env.render()
         decay_step += 1
-
-        action = predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size)
+        action, previous_prediction = predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size, previous_prediction=previous_prediction)
         '''
         final_action = []
         for i in range(len(action)):
             final_action.append(possible_actions[np.argmax(action[i])])
         '''
         final_action = argmax_2d(action)
+        #print(final_action)
 
         #print(action)
 
@@ -224,10 +229,11 @@ for i in range(episodes):
             labels = np.array(target_fit).reshape(-1, 4*int(2/step_size))
             #print("Features: "+str(feats.shape))
             #print("Labels: "+str(labels.shape))
+            #print(labels)
             model.train_on_batch(x=feats, y=labels)
 
     scores.append(score)
-    #print(score)
+    print("Score: {}".format(score))
 
 model.save(path+"trained_model/bipedal_walker_model.h5")
 fig = graph_results(scores)
