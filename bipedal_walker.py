@@ -8,8 +8,6 @@ import gym
 import copy
 from collections import deque
 
-path = "/Users/student/DMA_ML-AI/"
-
 # Stack the previous (stack_size) observations to give the neural network
 # Stack: oldest --- newest
 def stack_observations(obs, previous_stack, stack_size, new_episode):
@@ -53,8 +51,8 @@ def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, 
     nb_random = np.random.random()
     epsilon = max_epsilon + (min_epsilon - max_epsilon) * np.exp(-decay_rate * decay_step)
 
-    #if epsilon > 1:
-    if epsilon > nb_random:
+    if epsilon > 1:
+    #if epsilon > nb_random:
         # make input random
 
         predictions = np.array(nb_action)
@@ -151,16 +149,8 @@ action_codes = copy.deepcopy(nb_action)
 for i in range(len(action_codes)):
     action_codes[i] = np.identity(len(action_codes[i]), dtype=np.int)
 
-if not os.path.exists(path+"trained_model/bipedal_walker_model.h5"):
-    print("No model found: creating new model")
-    model = create_model(nb_action, state_space, stack_size, learning_rate, min_epsilon, max_epsilon, decay_rate)
-    new_model = True
-else:
-    print("Model found: loading model")
-    model = load_model()
-    new_model = False
-
-    episodes = 1
+model = create_model(nb_action, state_space, stack_size, learning_rate, min_epsilon, max_epsilon, decay_rate)
+new_model = True
 memory = deque(maxlen=1000)
 
 for i in range(episodes):
@@ -170,7 +160,7 @@ for i in range(episodes):
     obs_stack, state = stack_observations(state, None, stack_size, True)
 
     for j in range(max_steps):
-        #env.render()
+        env.render()
         decay_step += 1
         action, previous_prediction = predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size, previous_prediction=previous_prediction)
         '''
@@ -235,7 +225,8 @@ for i in range(episodes):
     scores.append(score)
     print("Score: {}".format(score))
 
-model.save(path+"trained_model/bipedal_walker_model.h5")
+#TODO: figure out how to save model
+#model.save(path+"trained_model/bipedal_walker_model.h5")
 fig = graph_results(scores)
 fig.savefig(fname="output.png")
 plt.show(fig)
