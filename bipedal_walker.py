@@ -94,16 +94,6 @@ def sample_memory(buffered_list, batch_size):
     index = np.random.choice(np.arange(buffer_size), size=batch_size, replace=False)
     return [buffered_list[i] for i in index]
 
-def graph_results(scores):
-    fig = plt.figure()
-    plt.plot(scores, color="black")
-
-    plt.title("Scores per Episode")
-    plt.xlabel("Episode")
-    plt.ylabel("Score")
-
-    return fig
-
 def argmax_2d(matrix):
     final_action = []
     for i in range(len(matrix)):
@@ -112,8 +102,9 @@ def argmax_2d(matrix):
 
 
 ####################
+
 # constants
-episodes = 10000
+episodes = 2#10000
 max_steps = 1000
 stack_size = 15
 
@@ -126,14 +117,17 @@ max_epsilon = 1
 batch_size = 64
 gamma = 0.618
 
-step_size = 0.0625
+#step_size = 0.0625
+step_size = 0.125
 
 show_render = False
 
 possible_actions = []
 for i in range(int(2/step_size)+1):
     possible_actions.append(step_size*i-1)
+
 ####################
+
 scores = []
 decay_step = 0
 
@@ -142,7 +136,9 @@ obs = env.reset()
 
 state_space = obs.shape[0]
 
+# nb_action is 4 * len(possible_actions) matrix of zeroes
 nb_action = [[0]*int(2/step_size)]*env.action_space.shape[0]
+# previous_prediction is length 64 vector of zeroes
 previous_prediction = (np.array([[0]*int(2/step_size)]*env.action_space.shape[0])).flatten()
 
 action_codes = copy.deepcopy(nb_action)
@@ -160,7 +156,7 @@ for i in range(episodes):
     obs_stack, state = stack_observations(state, None, stack_size, True)
 
     for j in range(max_steps):
-        env.render()
+        if show_render: env.render()
         decay_step += 1
         action, previous_prediction = predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size, previous_prediction=previous_prediction)
         '''
@@ -229,4 +225,4 @@ for i in range(episodes):
 #model.save(path+"trained_model/bipedal_walker_model.h5")
 fig = graph_results(scores)
 fig.savefig(fname="output.png")
-plt.show(fig)
+plt.show()
