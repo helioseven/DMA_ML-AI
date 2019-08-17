@@ -7,6 +7,55 @@ import random
 import gym
 import copy
 from collections import deque
+from my_util import makeGraph
+
+# constants
+episodes = 2#10000
+max_steps = 1000
+stack_size = 15
+
+#learning_rate = 0.00025
+learning_rate = 0.0001
+decay_rate = 0.00001
+min_epsilon = 0.01
+max_epsilon = 1
+
+batch_size = 64
+gamma = 0.618
+
+#step_size = 0.0625
+step_size = 0.5
+
+show_render = False
+new_model = True
+
+####################
+
+scores = []
+decay_step = 0
+
+env = gym.make('BipedalWalker-v2')
+obs = env.reset()
+
+state_space = obs.shape[0]
+
+# possible_actions is a vector of all possible increments between -1 and 1 based on step_size
+possible_actions = []
+for i in range(int(2/step_size)+1):
+    possible_actions.append(step_size*i-1)
+nb_choices = len(possible_actions)
+
+# nb_action is 4 * len(possible_actions) matrix of zeroes
+nb_action = [[0]*nb_choices]*env.action_space.shape[0]
+# previous_prediction is length 64 vector of zeroes
+previous_prediction = (np.array([[0]*nb_choices]*env.action_space.shape[0])).flatten()
+
+# action_codes is 4 * len(possible_actions) * len(possible_actions) matrix, where all 4 elements are identity matrices
+action_codes = copy.deepcopy(nb_action)
+for i in range(len(action_codes)):
+    action_codes[i] = np.identity(len(action_codes[i]), dtype=np.int)
+
+####################
 
 # Stack the previous (stack_size) observations to give the neural network
 # Stack: oldest --- newest
@@ -21,12 +70,11 @@ def stack_observations(obs, previous_stack, stack_size, new_episode):
         del new_stack[0]
         new_stack.append(obs)
 
-
     state = np.stack(new_stack, axis=1)
     return new_stack, state
 
 # Create model
-def create_model(nb_action, state_space, stack_size, learning_rate, min_epsilon, max_epsilon, decay_rate):
+def create_model(nb_action, state_space, stack_size):
     model = tf.keras.Sequential([tf.keras.layers.Conv2D(100, (1,8), input_shape=(state_space, stack_size, 1)),
                                  tf.keras.layers.Conv2D(75,(1,8)),
                                  tf.keras.layers.Flatten(),
@@ -75,7 +123,7 @@ def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, 
         # for each 16 numbers, find the argmax
         predictions = model.predict(feats)
         #print(predictions)
-        predictions = predictions.reshape(int(2/step_size), 4)
+        predictions = predictions.reshape(nb_choices, 4)
 
     #print(np.linalg.norm([previous_prediction.flatten(), predictions.flatten()]))
     choice = []
@@ -100,57 +148,13 @@ def argmax_2d(matrix):
         final_action.append(possible_actions[np.argmax(matrix[i])])
     return final_action
 
-
 ####################
 
-# constants
-episodes = 2#10000
-max_steps = 1000
-stack_size = 15
+model = create_model(nb_action, state_space, stack_size)
 
-#learning_rate = 0.00025
-learning_rate = 0.0001
-decay_rate = 0.00001
-min_epsilon = 0.01
-max_epsilon = 1
-
-batch_size = 64
-gamma = 0.618
-
-#step_size = 0.0625
-step_size = 0.125
-
-show_render = False
-
-possible_actions = []
-for i in range(int(2/step_size)+1):
-    possible_actions.append(step_size*i-1)
-
-####################
-
-scores = []
-decay_step = 0
-
-env = gym.make('BipedalWalker-v2')
-obs = env.reset()
-
-state_space = obs.shape[0]
-
-# nb_action is 4 * len(possible_actions) matrix of zeroes
-nb_action = [[0]*int(2/step_size)]*env.action_space.shape[0]
-# previous_prediction is length 64 vector of zeroes
-previous_prediction = (np.array([[0]*int(2/step_size)]*env.action_space.shape[0])).flatten()
-
-action_codes = copy.deepcopy(nb_action)
-for i in range(len(action_codes)):
-    action_codes[i] = np.identity(len(action_codes[i]), dtype=np.int)
-
-model = create_model(nb_action, state_space, stack_size, learning_rate, min_epsilon, max_epsilon, decay_rate)
-new_model = True
 memory = deque(maxlen=1000)
 
 for i in range(episodes):
-    print("Episode number: "+str(i+1))
     state = env.reset()
     score = 0
     obs_stack, state = stack_observations(state, None, stack_size, True)
@@ -204,7 +208,7 @@ for i in range(episodes):
             targets = [gamma * np.max(item) for item in predicts]
             targets = [targets[i] + rewards[i] for i in range(len(targets))]
             states = states.reshape(*states.shape, 1)
-            target_fit = [item for item in np.array(model.predict(states)).reshape(-1, 4, int(2/step_size))]
+            target_fit = [item for item in np.array(model.predict(states)).reshape(-1, 4, nb_choices)]
 
             for i in range(batch_size):
                 code = argmax_2d(actions[i])
@@ -212,17 +216,18 @@ for i in range(episodes):
                     target_fit[i][k] = targets[i]
 
             feats = np.array(states).reshape(-1, 24, stack_size, 1)
-            labels = np.array(target_fit).reshape(-1, 4*int(2/step_size))
+            labels = np.array(target_fit).reshape(-1, 4*nb_choices)
             #print("Features: "+str(feats.shape))
             #print("Labels: "+str(labels.shape))
             #print(labels)
             model.train_on_batch(x=feats, y=labels)
 
     scores.append(score)
+    print("Episode number: {}".format(i+1))
     print("Score: {}".format(score))
 
 #TODO: figure out how to save model
 #model.save(path+"trained_model/bipedal_walker_model.h5")
-fig = graph_results(scores)
-fig.savefig(fname="output.png")
+fig = makeGraph(scores)
+# fig.savefig(fname="output.png")
 plt.show()
