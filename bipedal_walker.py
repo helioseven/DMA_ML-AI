@@ -37,6 +37,8 @@ decay_step = 0
 env = gym.make('BipedalWalker-v2')
 obs = env.reset()
 
+####################
+
 state_space = obs.shape[0]
 
 # possible_actions is a vector of all possible increments between -1 and 1 based on step_size
@@ -45,25 +47,24 @@ for i in range(int(2/step_size)+1):
     possible_actions.append(step_size*i-1)
 nb_choices = len(possible_actions)
 
-# nb_action is 4 * len(possible_actions) matrix of zeroes
-nb_action = [[0]*nb_choices]*env.action_space.shape[0]
-# previous_prediction is length 64 vector of zeroes
-previous_prediction = (np.array([[0]*nb_choices]*env.action_space.shape[0])).flatten()
+# action_space is 4 * (nb_choices) matrix of zeroes
+action_space = np.array([[0]*nb_choices]*env.action_space.shape[0])
 
-# action_codes is 4 * len(possible_actions) * len(possible_actions) matrix, where all 4 elements are identity matrices
-action_codes = copy.deepcopy(nb_action)
-for i in range(len(action_codes)):
-    action_codes[i] = np.identity(len(action_codes[i]), dtype=np.int)
+# action_codes is the (nb_choices) * (nb_choices) identity matrix
+action_codes = np.identity(nb_choices, dtype=np.int)
+
+# previous_prediction is length 64 vector of zeroes
+prediction_space = np.array([[[[0.0]*nb_choices]*nb_choices]*nb_choices]*nb_choices)
 
 ####################
 
 # Stack the previous (stack_size) observations to give the neural network
 # Stack: oldest --- newest
-def stack_observations(obs, previous_stack, stack_size, new_episode):
+def stack_observations(obs, previous_stack, new_episode):
     if previous_stack == None and not new_episode:
         raise Exception('"None" input was unexpected: please enter a previous stack or set new_episode to True')
     if new_episode:
-        new_stack = [np.zeros(obs.shape, dtype=np.int) for i in range(stack_size)]
+        new_stack = [np.zeros(obs.shape, dtype=np.int)]*stack_size
         new_stack[len(new_stack)-1] = obs
     else:
         new_stack = previous_stack
@@ -74,14 +75,14 @@ def stack_observations(obs, previous_stack, stack_size, new_episode):
     return new_stack, state
 
 # Create model
-def create_model(nb_action, state_space, stack_size):
+def create_model(nb_actions, state_space):
     model = tf.keras.Sequential([tf.keras.layers.Conv2D(100, (1,8), input_shape=(state_space, stack_size, 1)),
                                  tf.keras.layers.Conv2D(75,(1,8)),
                                  tf.keras.layers.Flatten(),
                                  tf.keras.layers.Dense(50, activation="relu"),
                                  tf.keras.layers.Dense(25, activation="relu"),
                                  tf.keras.layers.Dense(10, activation="relu"),
-                                 tf.keras.layers.Dense(len(np.array(nb_action).flatten()), activation="softmax")
+                                 tf.keras.layers.Dense(len(np.array(nb_actions).flatten()), activation="softmax")
                                  ])
     opt = tf.keras.optimizers.Adam(lr=learning_rate,
                                 beta_1=min_epsilon,
@@ -91,24 +92,21 @@ def create_model(nb_action, state_space, stack_size):
     return model
 
 def load_model():
-    model = tf.keras.models.load_model(path+"trained_model/bipedal_walker_model.h5")
+    model = tf.keras.models.load_model("trained_model/bipedal_walker_model.h5")
     return model
 
-# FIXME: predict_action almost consistantly returning the same values
-def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size, previous_prediction=None):
+# 
+def predict_actions(model, obs_stack):
     nb_random = np.random.random()
     epsilon = max_epsilon + (min_epsilon - max_epsilon) * np.exp(-decay_rate * decay_step)
 
-    if epsilon > 1:
-    #if epsilon > nb_random:
+    if epsilon > nb_random:
         # make input random
+        predictions = np.array(nb_actions)
 
-        predictions = np.array(nb_action)
-        #print(predictions)
-
-        for i in range(len(nb_action)):
-            for j in range(len(nb_action[i])):
-                predictions[i][j] = random.randint(1, len(nb_action[i]))-1
+        for i in range(len(nb_actions)):
+            for j in range(len(nb_actions[i])):
+                predictions[i][j] = random.randint(1, len(nb_actions[i]))-1
     else:
         # use model to predict
         feats = np.array(obs_stack).reshape(1, 24, stack_size, 1)
@@ -125,9 +123,8 @@ def predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, 
         #print(predictions)
         predictions = predictions.reshape(nb_choices, 4)
 
-    #print(np.linalg.norm([previous_prediction.flatten(), predictions.flatten()]))
     choice = []
-    for i in range(len(nb_action)):
+    for i in range(len(nb_actions)):
         choice.append(np.argmax(predictions[i]))
     output = []
     for i in range(len(choice)):
@@ -150,7 +147,7 @@ def argmax_2d(matrix):
 
 ####################
 
-model = create_model(nb_action, state_space, stack_size)
+model = create_model(action_space, state_space, stack_size)
 
 memory = deque(maxlen=1000)
 
@@ -162,7 +159,7 @@ for i in range(episodes):
     for j in range(max_steps):
         if show_render: env.render()
         decay_step += 1
-        action, previous_prediction = predict_action(model, env, obs_stack, nb_action, action_codes, max_epsilon, min_epsilon, decay_rate, decay_step, state_space, stack_size, step_size, previous_prediction=previous_prediction)
+        action, previous_prediction = predict_actions(model, obs_stack)
         '''
         final_action = []
         for i in range(len(action)):
@@ -227,7 +224,7 @@ for i in range(episodes):
     print("Score: {}".format(score))
 
 #TODO: figure out how to save model
-#model.save(path+"trained_model/bipedal_walker_model.h5")
+#model.save("trained_model/bipedal_walker_model.h5")
 fig = makeGraph(scores)
 # fig.savefig(fname="output.png")
 plt.show()
