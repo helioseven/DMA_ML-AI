@@ -7,7 +7,7 @@ import random
 import gym
 import copy
 from collections import deque
-from my_util import makeGraph
+from my_util import argmax_4d, make_graph, sample_memory
 
 # constants
 episodes = 2#10000
@@ -39,6 +39,7 @@ obs = env.reset()
 
 ####################
 
+# state_space is 24
 state_space = obs.shape[0]
 
 # possible_actions is a vector of all possible increments between -1 and 1 based on step_size
@@ -53,36 +54,19 @@ action_space = np.array([[0]*nb_choices]*env.action_space.shape[0])
 # action_codes is the (nb_choices) * (nb_choices) identity matrix
 action_codes = np.identity(nb_choices, dtype=np.int)
 
-# previous_prediction is length 64 vector of zeroes
+# previous_prediction is (nb_choices) * (nb_choices) * (nb_choices) * (nb_choices) matrix of zeroes
 prediction_space = np.array([[[[0.0]*nb_choices]*nb_choices]*nb_choices]*nb_choices)
 
 ####################
 
-# Stack the previous (stack_size) observations to give the neural network
-# Stack: oldest --- newest
-def stack_observations(obs, previous_stack, new_episode):
-    if previous_stack == None and not new_episode:
-        raise Exception('"None" input was unexpected: please enter a previous stack or set new_episode to True')
-    if new_episode:
-        new_stack = [np.zeros(obs.shape, dtype=np.int)]*stack_size
-        new_stack[len(new_stack)-1] = obs
-    else:
-        new_stack = previous_stack
-        del new_stack[0]
-        new_stack.append(obs)
-
-    state = np.stack(new_stack, axis=1)
-    return new_stack, state
-
 # Create model
-def create_model(nb_actions, state_space):
+def create_model(state_space, stack_size):
     model = tf.keras.Sequential([tf.keras.layers.Conv2D(100, (1,8), input_shape=(state_space, stack_size, 1)),
                                  tf.keras.layers.Conv2D(75,(1,8)),
                                  tf.keras.layers.Flatten(),
-                                 tf.keras.layers.Dense(50, activation="relu"),
-                                 tf.keras.layers.Dense(25, activation="relu"),
-                                 tf.keras.layers.Dense(10, activation="relu"),
-                                 tf.keras.layers.Dense(len(np.array(nb_actions).flatten()), activation="softmax")
+                                 tf.keras.layers.Dense(1200, activation="relu"),
+                                 tf.keras.layers.Dense(800, activation="relu"),
+                                 tf.keras.layers.Dense(nb_choices**4, activation="softmax")
                                  ])
     opt = tf.keras.optimizers.Adam(lr=learning_rate,
                                 beta_1=min_epsilon,
@@ -95,103 +79,73 @@ def load_model():
     model = tf.keras.models.load_model("trained_model/bipedal_walker_model.h5")
     return model
 
-# 
+# Stack the previous (stack_size) observations to give the neural network
+# Stack: oldest --- newest
+def stack_observations(obs, previous_stack):
+    if previous_stack == None:
+        new_stack = [np.zeros(obs.shape, dtype=np.int)]*stack_size
+        new_stack[len(new_stack)-1] = obs
+    else:
+        new_stack = previous_stack
+        del new_stack[0]
+        new_stack.append(obs)
+
+    obs_stack = np.stack(new_stack, axis=1)
+    return obs_stack
+
+# returns an action either randomly or based on model prediction
 def predict_actions(model, obs_stack):
     nb_random = np.random.random()
     epsilon = max_epsilon + (min_epsilon - max_epsilon) * np.exp(-decay_rate * decay_step)
 
     if epsilon > nb_random:
-        # make input random
-        predictions = np.array(nb_actions)
-
-        for i in range(len(nb_actions)):
-            for j in range(len(nb_actions[i])):
-                predictions[i][j] = random.randint(1, len(nb_actions[i]))-1
+        # generate random predictions
+        predictions = random.randint(0, nb_choices-1, prediction_space.shape)
     else:
         # use model to predict
-        feats = np.array(obs_stack).reshape(1, 24, stack_size, 1)
-        '''
-        rewards = model.predict(feats)
-        choice1 = np.argmax(rewards[0])
-        ...
-        choice4 = np.argmax(rewards[3])
-        choice = [choice1, ..., choice4]
-        '''
+        feats = obs_stack.reshape(1, 24, stack_size, 1)
+        predictions = model.predict(feats)
 
         # for each 16 numbers, find the argmax
-        predictions = model.predict(feats)
-        #print(predictions)
-        predictions = predictions.reshape(nb_choices, 4)
+        predictions = predictions.reshape(nb_choices, nb_choices, nb_choices, nb_choices)
 
-    choice = []
-    for i in range(len(nb_actions)):
-        choice.append(np.argmax(predictions[i]))
-    output = []
-    for i in range(len(choice)):
-        output.append(action_codes[i][int(choice[i])])
-
-    #print(predictions)
-    return output, predictions
-
-def sample_memory(buffered_list, batch_size):
-    buffer_size = len(buffered_list)
-
-    index = np.random.choice(np.arange(buffer_size), size=batch_size, replace=False)
-    return [buffered_list[i] for i in index]
-
-def argmax_2d(matrix):
-    final_action = []
-    for i in range(len(matrix)):
-        final_action.append(possible_actions[np.argmax(matrix[i])])
-    return final_action
+    (i, j, k, l) = argmax_4d(predictions)
+    return [action_codes[i], action_codes[j], action_codes[k], action_codes[l]]
 
 ####################
 
-model = create_model(action_space, state_space, stack_size)
+model = create_model(state_space, stack_size)
 
 memory = deque(maxlen=1000)
 
 for i in range(episodes):
-    state = env.reset()
+    obs = env.reset()
     score = 0
-    obs_stack, state = stack_observations(state, None, stack_size, True)
+    obs_stack = stack_observations(obs, None)
 
     for j in range(max_steps):
-        if show_render: env.render()
+        if show_render:
+            env.render()
+
         decay_step += 1
-        action, previous_prediction = predict_actions(model, obs_stack)
-        '''
-        final_action = []
-        for i in range(len(action)):
-            final_action.append(possible_actions[np.argmax(action[i])])
-        '''
-        final_action = argmax_2d(action)
-        #print(final_action)
+        action = predict_actions(model, obs_stack)
 
-        #print(action)
-
-        obs, reward, done, _ = env.step(final_action)
+        obs, reward, done, _ = env.step(action)
         score += reward
 
         if done == True:
-            obs_stack, state = stack_observations(np.zeros(state_space,), obs_stack, stack_size, False)
+            obs_stack = stack_observations(np.zeros(state_space,), obs_stack)
             break
         else:
-            obs_stack, state = stack_observations(obs, obs_stack, stack_size, False)
+            obs_stack = stack_observations(obs, obs_stack)
 
-        memory.append((state, action, reward))
+        memory.append((obs_stack, action, reward))
 
         state = obs
 
         if len(memory) > 500:
-            #print("Training")
             batch = sample_memory(memory, batch_size)
             states = np.array([item[0] for item in batch])
-            #print("Mark 2: {}".format(states.shape))
-            #print(states.shape)
-
-            #print(states)
-            #print(states_np.shape)
 
             states_np = states.reshape(batch_size, *(24, stack_size))
             next_states = copy.deepcopy(states_np)
@@ -208,7 +162,7 @@ for i in range(episodes):
             target_fit = [item for item in np.array(model.predict(states)).reshape(-1, 4, nb_choices)]
 
             for i in range(batch_size):
-                code = argmax_2d(actions[i])
+                code = argmax_4d(actions[i])
                 for k in range(len(code)):
                     target_fit[i][k] = targets[i]
 
@@ -225,6 +179,6 @@ for i in range(episodes):
 
 #TODO: figure out how to save model
 #model.save("trained_model/bipedal_walker_model.h5")
-fig = makeGraph(scores)
+fig = make_graph(scores)
 # fig.savefig(fname="output.png")
 plt.show()
