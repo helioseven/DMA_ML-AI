@@ -2,30 +2,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def argmax_4d(matrix):
-	index = (0, 0, 0, 0)
-    high_score = 0.0
-    for i in range(len(matrix)):
-    	for j in range(len(matrix[i])):
-    		for k in range(len(matrix[i][j])):
-    			for l in range(len(matrix[i][j][k])):
-        			if matrix[i][j][k][l] > high_score:
-        				index = (i, j, k, l)
-        				high_score = matrix[i][j][k][l]
-    return index
+    _, b, c, d = matrix.shape
+    c *= d
+    b *= c
+
+    i = np.argmax(matrix)
+    _a = i // b
+    i %= b
+    _b = i // c
+    i %= c
+    _c = i // d
+    i %= d
+
+    return (_a, _b, _c, i)
 
 def make_graph(inList):
-	# generate figure
-	fig = plt.figure()
-	# plot the list
-	plt.plot(inList, color="black")
+    # generate figure
+    fig = plt.figure()
+    # plot the list
+    plt.plot(inList, color="black")
 
-	# add some pretty printing to our graph
-	plt.title("Scores per Episode")
-	plt.xlabel("Episode")
-	plt.ylabel("Score")
+    # add some pretty printing to our graph
+    plt.title("Scores per Episode")
+    plt.xlabel("Episode")
+    plt.ylabel("Score")
 
-	# save the figure
-	fig.savefig(fname="output.png")
+    # return the figure
+    return fig
 
 def sample_memory(buffered_list, batch_size):
     buffer_size = len(buffered_list)
