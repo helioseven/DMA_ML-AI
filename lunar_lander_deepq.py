@@ -1,29 +1,31 @@
 import gym
 import pandas as pd
 import numpy as np
+import numpy.ma as ma
 from collections import deque
 import random
 import copy
+import os.path
+from shutil import copyfile
 
 import keras
 from keras.models import Sequential
-from keras.layers import SimpleRNN
-from keras.layers.core import Dense, Dropout, Flatten
+from keras.layers import LSTM
+from keras.layers.core import Dense
 
 from my_util import makeGraph, sampleMemory
 
 # constants
 success = False
-stack_size = 16
-total_episodes = 100000
-max_steps = 250
-max_memory = int(2.5 * total_episodes)
+stack_size = 24
 batch_size = 256
-learning_rate = 0.0025
-gamma = 0.618
+total_episodes = 100000
+max_steps = 200
+max_memories = batch_size * max_steps
+learning_rate = 0.00025
+gamma = 0.9
 max_epsilon = 1.0
 min_epsilon = 0.001
-decay_rate = 10 / total_episodes
 decay_step = 0
 
 # environment setup
@@ -55,37 +57,38 @@ def stackFrames(stacked_frames, frame):
 
 # defines our keras model for Deep-Q training
 def getModel():
-	model = Sequential()
-	model.add(SimpleRNN(units=64, input_shape=state_space))
-	model.add(Dense(48, activation="relu"))
-	model.add(Dense(24, activation="relu"))
-	model.add(Dense(8, activation="relu"))
-	model.add(Dense(action_space, activation="softmax"))
-	opt = keras.optimizers.Adam(lr=learning_rate,
-								beta_1=min_epsilon,
-								beta_2=max_epsilon,
-								decay=decay_rate)
-	model.compile(optimizer=opt,
-				  loss="categorical_crossentropy")
+	if os.path.isfile("lunar_lander_dqn.h5"):
+		copyfile("lunar_lander_dqn.h5", "lunar_lander_dqn_old.h5")
+		model = keras.models.load_model("lunar_lander_dqn.h5")
+	else:
+		model = Sequential()
+		model.add(LSTM(units=32, return_sequences=True, input_shape=state_space))
+		model.add(LSTM(units=48))
+		model.add(Dense(32, activation="relu"))
+		model.add(Dense(16, activation="relu"))
+		model.add(Dense(action_space, activation="softmax"))
+		opt = keras.optimizers.Adam(lr=learning_rate)
+		model.compile(optimizer=opt, loss="categorical_crossentropy")
 	return model
 
 # performs model training
 def trainModel():
 	# first, separate memory into component data items
 	batch = sampleMemory(memory, batch_size)
-	states = np.array([item[0] for item in batch])
-	states = states.reshape(batch_size, *state_space)
-	actions = [item[1] for item in batch]
-	rewards = [item[2] for item in batch]
+	states = np.array([item[0] for item in batch]).reshape(batch_size, *state_space)
+	new_states = np.array([item[1] for item in batch]).reshape(batch_size, *state_space)
+	actions = [item[2] for item in batch]
+	rewards = [item[3] for item in batch]
+	is_done = [item[4] for item in batch]
 
 	# generate expected rewards for selected states
-	predicts = model.predict(states)
-	targets = [gamma * np.max(item) for item in predicts]
-	targets = [targets[i] + rewards[i] for i in range(len(targets))]
-	target_fit = copy.deepcopy(predicts)
+	target_fit = model.predict(states)
+	predicts = model.predict(new_states)
+	expects = [gamma * np.max(item) for item in predicts]
+	targets = [(0.0 if is_done[i] else expects[i]) + rewards[i] for i in range(batch_size)]
 
 	# populate labels with expected outcomes
-	for i in range(len(target_fit)):
+	for i in range(batch_size):
 		target_fit[i][actions[i]] = targets[i]
 
 	# format features and labels for training
@@ -99,11 +102,11 @@ def predictAction(frame_stack):
 	# random number to compare to epsilon
 	tradeoff = np.random.random()
 	# update epsilon based on decay_step
-	epsilon = max_epsilon \
-			  + (min_epsilon - max_epsilon) \
-			  * np.exp(-decay_rate * decay_step)
+	epsilon = max_epsilon + \
+			  (min_epsilon - max_epsilon) * \
+			  np.exp(-5 * decay_step / total_episodes)
 
-	if epsilon > tradeoff:
+	if epsilon < tradeoff:
 		# in early training, generate mostly random moves
 		choice = random.randint(1, len(action_codes)) - 1
 	else:
@@ -122,7 +125,7 @@ def predictAction(frame_stack):
 
 # build model, and create memory collection
 model = getModel()
-memory = deque(maxlen=max_memory)
+memory = deque(maxlen=max_memories)
 scores_list = []
 
 for episode in range(total_episodes):
@@ -130,50 +133,58 @@ for episode in range(total_episodes):
 	obs = env.reset()
 	score = 0.0
 	state = stackFrames(None, obs)
+	# increment decay_step to update epsilon
+	decay_step += 1
+
+	actions_taken = [0, 0, 0, 0]
 
 	# iterate through steps in the episode
 	for step in range(max_steps):
 		if episode % 100 == 0:
 			# render every 100th episode to window, so we can watch
 			env.render()
-		# increment decay_step to update epsilon
-		decay_step += 1
 
 		# generate an action
-		action = np.argmax(predictAction(state))
+		code = predictAction(state)
+		action = np.argmax(code)
+		actions_taken[action] += 1
 
 		# apply action to step the environment
 		obs, reward, done, _ = env.step(action)
 
 		# add received reward to episode score
 		score += reward
-		success = score >= 200.0
+		# set success flag if score threshold met
+		if score >= 200.0:
+			success = True
+			done = True
 
-		# if the last frame of the episode, flag success if so,
-		# and append empty frame to state
-		if done == True or success:
-			obs = np.zeros((8,))
-			state = stackFrames(state, obs)
+		# compile memory and add it to collection
+		new_state = stackFrames(state, obs)
+		memory.append((state, new_state, action, reward, done))
+
+		# after adding memory, break if done
+		if done:
 			break
-		# otherwise, simply add current frame to state
-		else:
-			state = stackFrames(state, obs)
 
-		# either way, compile memory and add it to collection
-		memory.append((state, action, reward))
+		# update state
+		state = new_state
 
 	scores_list.append(score)
+
+	print("Score for episode {}: {} <=> {}".format(episode, score, actions_taken))
 
 	if success:
 		break
 
 	# after each episode, do training if more than 500 memories
-	if len(memory) > 500:
+	if len(memory) > batch_size * 2:
 		trainModel()
 
-	print("Score for episode {}: {}".format(episode, score))
+model.save("lunar_lander_dqn.h5")
 
-makeGraph(scores_list)
+msl = ma.masked_less(scores_list, -200.0)
+makeGraph(msl)
 
 if success:
 	print("We win!")
