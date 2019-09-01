@@ -1,7 +1,6 @@
 import gym
 import pandas as pd
 import numpy as np
-import numpy.ma as ma
 from collections import deque
 import random
 import copy
@@ -20,7 +19,7 @@ success = False
 stack_size = 24
 batch_size = 256
 total_episodes = 100000
-max_steps = 200
+max_steps = 500
 max_memories = batch_size * max_steps
 learning_rate = 0.00025
 gamma = 0.9
@@ -129,14 +128,14 @@ memory = deque(maxlen=max_memories)
 scores_list = []
 
 for episode in range(total_episodes):
-	# reset environment, initialize variables
-	obs = env.reset()
-	score = 0.0
-	state = stackFrames(None, obs)
 	# increment decay_step to update epsilon
 	decay_step += 1
-
+	score = 0.0
 	actions_taken = [0, 0, 0, 0]
+
+	# reset environment, stack start state
+	obs = env.reset()
+	state = stackFrames(None, obs)
 
 	# iterate through steps in the episode
 	for step in range(max_steps):
@@ -147,6 +146,7 @@ for episode in range(total_episodes):
 		# generate an action
 		code = predictAction(state)
 		action = np.argmax(code)
+		# track actions each episode for terminal output
 		actions_taken[action] += 1
 
 		# apply action to step the environment
@@ -154,7 +154,10 @@ for episode in range(total_episodes):
 
 		# add received reward to episode score
 		score += reward
-		# set success flag if score threshold met
+		# finish episode if score is below arbitrary threshold
+		if score < -300.0:
+			done = True
+		# finish episode if score is above winning threshold
 		if score >= 200.0:
 			success = True
 			done = True
@@ -171,20 +174,19 @@ for episode in range(total_episodes):
 		state = new_state
 
 	scores_list.append(score)
-
 	print("Score for episode {}: {} <=> {}".format(episode, score, actions_taken))
 
 	if success:
 		break
 
-	# after each episode, do training if more than 500 memories
+	# after each episode, train model if sufficient memories exist
 	if len(memory) > batch_size * 2:
 		trainModel()
 
+# save model model only when finished (could add checkpoints)
 model.save("lunar_lander_dqn.h5")
-
-msl = ma.masked_less(scores_list, -200.0)
-makeGraph(msl)
+# creates graph image and saves as output.png
+makeGraph(scores_list)
 
 if success:
 	print("We win!")
