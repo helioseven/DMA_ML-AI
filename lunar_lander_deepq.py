@@ -1,27 +1,23 @@
-import gym
-import pandas as pd
-import numpy as np
-from collections import deque
 import random
-import copy
-import os.path
+from os.path import isfile
 from shutil import copyfile
+from collections import deque
+import numpy as np
+import gym
 
-import keras
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import LSTM
 from keras.layers.core import Dense
 
-from my_util import makeGraph, sampleMemory
+from my_util import makeAnimation, makeGraph, sampleMemory
 
 # constants
 success = False
 stack_size = 24
 batch_size = 256
-total_episodes = 100000
+total_episodes = 10000#0
 max_steps = 500
 max_memories = batch_size * max_steps
-learning_rate = 0.00025
 gamma = 0.9
 max_epsilon = 1.0
 min_epsilon = 0.001
@@ -56,18 +52,16 @@ def stackFrames(stacked_frames, frame):
 
 # defines our keras model for Deep-Q training
 def getModel():
-	if os.path.isfile("lunar_lander_dqn.h5"):
+	if isfile("lunar_lander_dqn.h5"):
 		copyfile("lunar_lander_dqn.h5", "lunar_lander_dqn_old.h5")
-		model = keras.models.load_model("lunar_lander_dqn.h5")
+		model = load_model("lunar_lander_dqn.h5")
 	else:
 		model = Sequential()
 		model.add(LSTM(units=32, return_sequences=True, input_shape=state_space))
 		model.add(LSTM(units=48))
-		model.add(Dense(32, activation="relu"))
-		model.add(Dense(16, activation="relu"))
-		model.add(Dense(action_space, activation="softmax"))
-		opt = keras.optimizers.Adam(lr=learning_rate)
-		model.compile(optimizer=opt, loss="categorical_crossentropy")
+		model.add(Dense(16, activation='relu'))
+		model.add(Dense(action_space, activation='softmax'))
+		model.compile(optimizer='adam', loss='categorical_crossentropy')
 	return model
 
 # performs model training
@@ -100,16 +94,16 @@ def trainModel():
 def predictAction(frame_stack):
 	# random number to compare to epsilon
 	tradeoff = np.random.random()
-	# update epsilon based on decay_step
+	# update epsilon based on decay_step and constants
 	epsilon = max_epsilon + \
 			  (min_epsilon - max_epsilon) * \
 			  np.exp(-5 * decay_step / total_episodes)
 
+	# in early training, generate mostly random moves
 	if epsilon < tradeoff:
-		# in early training, generate mostly random moves
-		choice = random.randint(1, len(action_codes)) - 1
+		choice = random.randint(1, action_space) - 1
+	# as epsilon decays towards 1, more moves are based on predicted rewards
 	else:
-		# as epsilon decays, more moves are based on predicted rewards
 		# first, reshape frame_stack to model's desired input shape
 		feats = frame_stack.reshape(1, *state_space)
 		# generate predictions based on frame_stack features
@@ -131,8 +125,10 @@ for episode in range(total_episodes):
 	# increment decay_step to update epsilon
 	decay_step += 1
 	score = 0.0
-	actions_taken = [0, 0, 0, 0]
+	actions_taken = []
 
+	# generate new random seed and store it for possible future use
+	seed = env.seed()[0]
 	# reset environment, stack start state
 	obs = env.reset()
 	state = stackFrames(None, obs)
@@ -147,7 +143,7 @@ for episode in range(total_episodes):
 		code = predictAction(state)
 		action = np.argmax(code)
 		# track actions each episode for terminal output
-		actions_taken[action] += 1
+		actions_taken.append(action)
 
 		# apply action to step the environment
 		obs, reward, done, _ = env.step(action)
@@ -174,9 +170,22 @@ for episode in range(total_episodes):
 		state = new_state
 
 	scores_list.append(score)
-	print("Score for episode {}: {} <=> {}".format(episode, score, actions_taken))
+	print("Score for episode {}: {}".format(episode, score))
 
+	# added some bits to make a .gif of the successful episode
 	if success:
+		renders = []
+		# use stored seed to guarantee determinism
+		env.seed(seed)
+		# reset env and store first frame
+		env.reset()
+		renders.append(env.render(mode='rgb_array'))
+		for action in actions_taken:
+			# then just step through the loop
+			env.step(action)
+			renders.append(env.render(mode='rgb_array'))
+		# pass the array to a utility function to generate sequence.gif
+		makeAnimation(renders)
 		break
 
 	# after each episode, train model if sufficient memories exist
@@ -185,7 +194,7 @@ for episode in range(total_episodes):
 
 # save model model only when finished (could add checkpoints)
 model.save("lunar_lander_dqn.h5")
-# creates graph image and saves as output.png
+# uses utility function to create graph image and save as output.png
 makeGraph(scores_list)
 
 if success:
