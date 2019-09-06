@@ -8,14 +8,15 @@ import gym
 from keras.models import Sequential, load_model
 from keras.layers import LSTM
 from keras.layers.core import Dense
+from keras.optimizers import Adam
 
 from my_util import makeAnimation, makeGraph, sampleMemory
 
 # constants
 success = False
-stack_size = 24
-batch_size = 256
-total_episodes = 10000#0
+stack_size = 32
+batch_size = 512
+total_episodes = 100000
 max_steps = 500
 max_memories = batch_size * max_steps
 gamma = 0.9
@@ -58,10 +59,11 @@ def getModel():
 	else:
 		model = Sequential()
 		model.add(LSTM(units=32, return_sequences=True, input_shape=state_space))
-		model.add(LSTM(units=48))
+		model.add(LSTM(units=64))
+		model.add(Dense(32, activation='relu'))
 		model.add(Dense(16, activation='relu'))
 		model.add(Dense(action_space, activation='softmax'))
-		model.compile(optimizer='adam', loss='categorical_crossentropy')
+		model.compile(optimizer=Adam(lr=0.00025), loss='categorical_crossentropy')
 	return model
 
 # performs model training
@@ -151,7 +153,7 @@ for episode in range(total_episodes):
 		# add received reward to episode score
 		score += reward
 		# finish episode if score is below arbitrary threshold
-		if score < -300.0:
+		if score < -200.0:
 			done = True
 		# finish episode if score is above winning threshold
 		if score >= 200.0:
@@ -189,7 +191,7 @@ for episode in range(total_episodes):
 		break
 
 	# after each episode, train model if sufficient memories exist
-	if len(memory) > batch_size * 2:
+	if len(memory) > batch_size * 4:
 		trainModel()
 
 # save model model only when finished (could add checkpoints)
